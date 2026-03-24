@@ -1,0 +1,18 @@
+task: 'vineyard_recon'
+steps: 5.01e5
+env_num: 4
+eval_episode_num: 4
+action_repeat: 1
+train_ratio: 512
+time_limit: 100   # 100 policy steps × 0.3 s = 30 s episode
+
+seed: ${seed}
+device: ${device}
+
+size: [64, 64]
+encoder:
+  mlp_keys: 'vector'
+  cnn_keys: 'image'
+decoder:
+  mlp_keys: 'vector'
+  cnn_keys: 'image'
