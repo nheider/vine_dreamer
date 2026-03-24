@@ -1,7 +1,11 @@
 """R2Dreamer wrapper for the VineyardEnv (active vine-wood reconstruction)."""
 
+import os
 import sys
 from pathlib import Path
+
+# Use EGL for headless GPU rendering (must be set before mujoco import).
+os.environ.setdefault("MUJOCO_GL", "egl")
 
 import gymnasium as gym
 import numpy as np
