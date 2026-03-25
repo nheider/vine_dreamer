@@ -62,7 +62,9 @@ class OnlineTrainer:
 
             # Capture reconstruction image from the first env when it finishes.
             if recon_image is None and done[0] and "recon_image" in trans:
-                recon_image = tools.to_np(trans["recon_image"][0, 0])  # (H, W, C)
+                recon_image = tools.to_np(trans["recon_image"][0])  # (H, W, C) or (1, H, W, C)
+                if recon_image.ndim == 4:
+                    recon_image = recon_image[0]
 
             # Store transition.
             # We keep the observation and the action that produced it together.
