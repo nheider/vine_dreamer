@@ -21,7 +21,7 @@ _OVERVIEW_H, _OVERVIEW_W = 256, 256
 # Reconstruction top-down image size.
 _RECON_SIZE = 128
 # Small per-step penalty to encourage efficient coverage.
-_STEP_PENALTY = -0.005
+_STEP_PENALTY = -0.001
 
 
 class Vineyard(gym.Env):
