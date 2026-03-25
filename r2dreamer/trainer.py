@@ -116,7 +116,6 @@ class OnlineTrainer:
         then transferred to GPU with non_blocking=True.
         """
         envs = self.train_envs
-        video_cache = []
         step = self.replay_buffer.count() * self._action_repeat
         update_count = 0
         # (B,)
@@ -138,10 +137,6 @@ class OnlineTrainer:
             if done.any():
                 for i, d in enumerate(done):
                     if d and lengths[i] > 0:
-                        if i == 0 and len(video_cache) > 0:
-                            video = torch.stack(video_cache, axis=0)
-                            self.logger.video("train_video", tools.to_np(video[None]))
-                            video_cache = []
                         self.logger.scalar("episode/score", returns[i])
                         self.logger.scalar("episode/length", lengths[i])
                         self.logger.write(step + i)  # to show all values on tensorboard
@@ -174,8 +169,6 @@ class OnlineTrainer:
             trans["stoch"] = agent_state["stoch"]
             trans["deter"] = agent_state["deter"]
             trans["episode"] = episode_ids  # Don't lift dim
-            if "image" in trans:
-                video_cache.append(trans["image"][0])
             # Strip large obs-only keys before storing in replay buffer.
             exclude_keys = [k for k in ("overview", "recon_image") if k in trans.keys()]
             buf_trans = trans.exclude(*exclude_keys) if exclude_keys else trans

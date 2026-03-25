@@ -124,7 +124,7 @@ class ReconGrid:
             - self.revealed
         )
         self.revealed      |= new_voxels
-        self.total_revealed = len(self.revealed)
+        self.total_revealed = len(self.revealed & self.ground_truth)
         return len(new_voxels)
 
     # ---------------------------------------------------------- properties --
@@ -147,44 +147,31 @@ class ReconGrid:
 
         Returns an (size, size, 3) uint8 RGB array:
           * dark gray  — ground-truth voxels not yet revealed
-          * green      — correctly revealed (hit)
-          * red        — revealed but not in ground truth (false positive)
+          * green      — revealed ground-truth voxels
         """
         img = np.zeros((size, size, 3), dtype=np.uint8)
         if not self.ground_truth:
             return img
 
-        # Collect all voxel coords to determine bounds (X and Z axes)
-        all_voxels = self.ground_truth | self.revealed
-        coords = np.array(list(all_voxels), dtype=np.float64)
+        coords = np.array(list(self.ground_truth), dtype=np.float64)
         xs, zs = coords[:, 0], coords[:, 2]
         x_min, x_max = xs.min() - 1, xs.max() + 1
         z_min, z_max = zs.min() - 1, zs.max() + 1
-        x_span = max(x_max - x_min, 1)
-        z_span = max(z_max - z_min, 1)
-        span = max(x_span, z_span)
+        span = max(x_max - x_min, z_max - z_min, 1)
 
         def _px(vx, vz):
             col = int((vx - x_min) / span * (size - 1))
             row = int((1.0 - (vz - z_min) / span) * (size - 1))  # Z up
             return np.clip(row, 0, size - 1), np.clip(col, 0, size - 1)
 
-        # Ground truth (dark gray)
+        # Ground truth not yet revealed (dark gray)
         for vx, _, vz in self.ground_truth:
             r, c = _px(vx, vz)
             img[r, c] = [60, 60, 60]
 
-        hits = self.revealed & self.ground_truth
-        false_pos = self.revealed - self.ground_truth
-
-        # Hits (green)
-        for vx, _, vz in hits:
+        # Revealed ground-truth voxels (green)
+        for vx, _, vz in (self.revealed & self.ground_truth):
             r, c = _px(vx, vz)
             img[r, c] = [0, 220, 60]
-
-        # False positives (red)
-        for vx, _, vz in false_pos:
-            r, c = _px(vx, vz)
-            img[r, c] = [220, 40, 40]
 
         return img
