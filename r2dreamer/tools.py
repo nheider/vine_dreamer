@@ -170,7 +170,7 @@ class Logger:
         if self._wandb is not None:
             import wandb
 
-            wb_log = {"step": step}
+            wb_log = {}
             for name, value in scalars:
                 wb_log[name] = value
             for name, value in self._videos.items():
@@ -184,7 +184,8 @@ class Logger:
                     fps=16,
                     format="mp4",
                 )
-            self._wandb.log(wb_log, step=step)
+            if wb_log:
+                self._wandb.log(wb_log, step=step, commit=True)
 
         self._scalars = {}
         self._images = {}
