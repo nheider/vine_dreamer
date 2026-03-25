@@ -121,6 +121,7 @@ class Logger:
         self._filename = filename
         self._writer = SummaryWriter(log_dir=str(logdir), max_queue=1000)
         self._wandb = wandb_run
+        self._wandb_step = 0
         self._last_step = None
         self._last_time = None
         self._scalars = {}
@@ -153,7 +154,8 @@ class Logger:
             else:
                 self._writer.add_scalar(name, value, step)
         for name, value in self._images.items():
-            self._writer.add_image(name, value, step)
+            fmt = "HWC" if value.ndim == 3 else "CHW"
+            self._writer.add_image(name, value, step, dataformats=fmt)
         for name, value in self._videos.items():
             name = name if isinstance(name, str) else name.decode("utf-8")
             if np.issubdtype(value.dtype, np.floating):
@@ -173,6 +175,10 @@ class Logger:
             wb_log = {}
             for name, value in scalars:
                 wb_log[name] = value
+            for name, value in self._images.items():
+                if np.issubdtype(value.dtype, np.floating):
+                    value = np.clip(255 * value, 0, 255).astype(np.uint8)
+                wb_log[name] = wandb.Image(value)
             for name, value in self._videos.items():
                 name = name if isinstance(name, str) else name.decode("utf-8")
                 if np.issubdtype(value.dtype, np.floating):
@@ -185,7 +191,10 @@ class Logger:
                     format="mp4",
                 )
             if wb_log:
-                self._wandb.log(wb_log, step=step, commit=True)
+                self._wandb_step = max(self._wandb_step, step)
+                wb_log["env_step"] = step
+                self._wandb.log(wb_log, step=self._wandb_step, commit=True)
+                self._wandb_step += 1
 
         self._scalars = {}
         self._images = {}

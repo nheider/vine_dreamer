@@ -42,6 +42,7 @@ class OnlineTrainer:
         log_metrics = {}
         # cache is only used for video logging / open-loop prediction.
         cache = []
+        recon_image = None  # capture reconstruction image from first env at episode end
         agent_state = agent.get_initial_state(envs.env_num)
         # (B, A)
         act = agent_state["prev_action"].clone()
@@ -58,6 +59,10 @@ class OnlineTrainer:
             trans = trans_cpu.to(agent.device, non_blocking=True)
             # (B,)
             done = done_cpu.to(agent.device)
+
+            # Capture reconstruction image from the first env when it finishes.
+            if recon_image is None and done[0] and "recon_image" in trans:
+                recon_image = tools.to_np(trans["recon_image"][0, 0])  # (H, W, C)
 
             # Store transition.
             # We keep the observation and the action that produced it together.
@@ -85,6 +90,8 @@ class OnlineTrainer:
             self.logger.video("eval_video", tools.to_np(cache["image"][:1]))
         if cache is not None and "overview" in cache:
             self.logger.video("eval_overview", tools.to_np(cache["overview"][:1]))
+        if recon_image is not None:
+            self.logger.image("eval_recon", recon_image)
         if self.video_pred_log and cache is not None:
             initial = agent.get_initial_state(1)
             self.logger.video(
@@ -168,7 +175,8 @@ class OnlineTrainer:
             if "image" in trans:
                 video_cache.append(trans["image"][0])
             # Strip large obs-only keys before storing in replay buffer.
-            buf_trans = trans.exclude("overview") if "overview" in trans.keys() else trans
+            exclude_keys = [k for k in ("overview", "recon_image") if k in trans.keys()]
+            buf_trans = trans.exclude(*exclude_keys) if exclude_keys else trans
             self.replay_buffer.add_transition(buf_trans.detach())
             returns += trans["reward"][:, 0]
             # Update models after enough data has accumulated

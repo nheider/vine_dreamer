@@ -141,3 +141,50 @@ class ReconGrid:
         if not self.revealed:
             return np.zeros((0, 3), dtype=np.float64)
         return np.array(list(self.revealed), dtype=np.float64) * self.voxel_size
+
+    def render_topdown(self, size: int = 128) -> np.ndarray:
+        """Render a top-down (X-Z) reconstruction image.
+
+        Returns an (size, size, 3) uint8 RGB array:
+          * dark gray  — ground-truth voxels not yet revealed
+          * green      — correctly revealed (hit)
+          * red        — revealed but not in ground truth (false positive)
+        """
+        img = np.zeros((size, size, 3), dtype=np.uint8)
+        if not self.ground_truth:
+            return img
+
+        # Collect all voxel coords to determine bounds (X and Z axes)
+        all_voxels = self.ground_truth | self.revealed
+        coords = np.array(list(all_voxels), dtype=np.float64)
+        xs, zs = coords[:, 0], coords[:, 2]
+        x_min, x_max = xs.min() - 1, xs.max() + 1
+        z_min, z_max = zs.min() - 1, zs.max() + 1
+        x_span = max(x_max - x_min, 1)
+        z_span = max(z_max - z_min, 1)
+        span = max(x_span, z_span)
+
+        def _px(vx, vz):
+            col = int((vx - x_min) / span * (size - 1))
+            row = int((1.0 - (vz - z_min) / span) * (size - 1))  # Z up
+            return np.clip(row, 0, size - 1), np.clip(col, 0, size - 1)
+
+        # Ground truth (dark gray)
+        for vx, _, vz in self.ground_truth:
+            r, c = _px(vx, vz)
+            img[r, c] = [60, 60, 60]
+
+        hits = self.revealed & self.ground_truth
+        false_pos = self.revealed - self.ground_truth
+
+        # Hits (green)
+        for vx, _, vz in hits:
+            r, c = _px(vx, vz)
+            img[r, c] = [0, 220, 60]
+
+        # False positives (red)
+        for vx, _, vz in false_pos:
+            r, c = _px(vx, vz)
+            img[r, c] = [220, 40, 40]
+
+        return img
