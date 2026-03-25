@@ -83,6 +83,8 @@ class OnlineTrainer:
             self.logger.scalar(f"episode/eval_{key[4:]}", value.mean())
         if cache is not None and "image" in cache:
             self.logger.video("eval_video", tools.to_np(cache["image"][:1]))
+        if cache is not None and "overview" in cache:
+            self.logger.video("eval_overview", tools.to_np(cache["overview"][:1]))
         if self.video_pred_log and cache is not None:
             initial = agent.get_initial_state(1)
             self.logger.video(
@@ -165,7 +167,9 @@ class OnlineTrainer:
             trans["episode"] = episode_ids  # Don't lift dim
             if "image" in trans:
                 video_cache.append(trans["image"][0])
-            self.replay_buffer.add_transition(trans.detach())
+            # Strip large obs-only keys before storing in replay buffer.
+            buf_trans = trans.exclude("overview") if "overview" in trans.keys() else trans
+            self.replay_buffer.add_transition(buf_trans.detach())
             returns += trans["reward"][:, 0]
             # Update models after enough data has accumulated
             if step // (envs.env_num * self._action_repeat) > self.batch_length + 1:

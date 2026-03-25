@@ -116,10 +116,11 @@ class CudaBenchmark:
 
 
 class Logger:
-    def __init__(self, logdir, filename="metrics.jsonl"):
+    def __init__(self, logdir, filename="metrics.jsonl", wandb_run=None):
         self._logdir = logdir
         self._filename = filename
         self._writer = SummaryWriter(log_dir=str(logdir), max_queue=1000)
+        self._wandb = wandb_run
         self._last_step = None
         self._last_time = None
         self._scalars = {}
@@ -164,6 +165,27 @@ class Logger:
             self._writer.add_histogram(name, value, step)
 
         self._writer.flush()
+
+        # --- wandb ---
+        if self._wandb is not None:
+            import wandb
+
+            wb_log = {"step": step}
+            for name, value in scalars:
+                wb_log[name] = value
+            for name, value in self._videos.items():
+                name = name if isinstance(name, str) else name.decode("utf-8")
+                if np.issubdtype(value.dtype, np.floating):
+                    value = np.clip(255 * value, 0, 255).astype(np.uint8)
+                # value shape: (B, T, H, W, C) — take first batch element
+                frames = value[0]  # (T, H, W, C)
+                wb_log[name] = wandb.Video(
+                    frames.transpose(0, 3, 1, 2),  # (T, C, H, W)
+                    fps=16,
+                    format="mp4",
+                )
+            self._wandb.log(wb_log, step=step)
+
         self._scalars = {}
         self._images = {}
         self._videos = {}

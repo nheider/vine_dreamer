@@ -8,12 +8,16 @@ from pathlib import Path
 os.environ.setdefault("MUJOCO_GL", "egl")
 
 import gymnasium as gym
+import mujoco
 import numpy as np
 
 # Make the vine_dreamer package importable (one level up from r2dreamer/).
 _VINE_DREAMER_DIR = str(Path(__file__).resolve().parent.parent.parent)
 if _VINE_DREAMER_DIR not in sys.path:
     sys.path.insert(0, _VINE_DREAMER_DIR)
+
+# Overview camera resolution for rollout videos logged to wandb.
+_OVERVIEW_H, _OVERVIEW_W = 256, 256
 
 
 class Vineyard(gym.Env):
@@ -25,6 +29,8 @@ class Vineyard(gym.Env):
       * ``obs["image"]`` is uint8 [0, 255] (R2Dreamer convention)
       * Adds ``is_first``, ``is_last``, ``is_terminal`` boolean flags
       * ``vector`` obs is exposed for optional MLP encoding
+      * Vineyard stats exposed as ``log_*`` keys for automatic aggregation
+      * ``overview`` key carries the bird's-eye camera frame for rollout videos
     """
 
     metadata = {}
@@ -42,15 +48,19 @@ class Vineyard(gym.Env):
         self._action_repeat = action_repeat
         self._size = size
         self._seed = seed
+        self._overview_renderer = None
 
     @property
     def observation_space(self):
         spaces = {
             "image": gym.spaces.Box(0, 255, self._size + (3,), dtype=np.uint8),
             "vector": gym.spaces.Box(-np.inf, np.inf, (10,), dtype=np.float32),
+            "overview": gym.spaces.Box(0, 255, (_OVERVIEW_H, _OVERVIEW_W, 3), dtype=np.uint8),
             "is_first": gym.spaces.Box(0, 1, (), dtype=bool),
             "is_last": gym.spaces.Box(0, 1, (), dtype=bool),
             "is_terminal": gym.spaces.Box(0, 1, (), dtype=bool),
+            "log_coverage": gym.spaces.Box(0, 1, (), dtype=np.float32),
+            "log_collision": gym.spaces.Box(0, 1, (), dtype=np.float32),
         }
         return gym.spaces.Dict(spaces)
 
@@ -61,6 +71,7 @@ class Vineyard(gym.Env):
     def step(self, action):
         assert np.isfinite(action).all(), action
         total_reward = 0.0
+        info = {}
         for _ in range(self._action_repeat):
             obs_raw, reward, terminated, truncated, info = self._env.step(action)
             total_reward += reward
@@ -68,20 +79,41 @@ class Vineyard(gym.Env):
             if done:
                 break
 
-        obs = self._convert_obs(obs_raw, is_first=False, is_last=done, is_terminal=terminated)
+        obs = self._convert_obs(
+            obs_raw, info, is_first=False, is_last=done, is_terminal=terminated,
+        )
         return obs, total_reward, done, info
 
     def reset(self, **kwargs):
+        self._overview_renderer = None
         obs_raw, _info = self._env.reset(seed=self._seed)
-        return self._convert_obs(obs_raw, is_first=True, is_last=False, is_terminal=False)
+        return self._convert_obs(
+            obs_raw, {}, is_first=True, is_last=False, is_terminal=False,
+        )
 
-    def _convert_obs(self, raw, *, is_first, is_last, is_terminal):
+    def _render_overview(self):
+        """Render the bird's-eye overview camera (for rollout videos)."""
+        inner = self._env
+        if self._overview_renderer is None:
+            self._overview_renderer = mujoco.Renderer(
+                inner.model, _OVERVIEW_H, _OVERVIEW_W,
+            )
+            self._overview_id = mujoco.mj_name2id(
+                inner.model, mujoco.mjtObj.mjOBJ_CAMERA, "overview",
+            )
+        self._overview_renderer.update_scene(inner.data, camera=self._overview_id)
+        return self._overview_renderer.render()
+
+    def _convert_obs(self, raw, info, *, is_first, is_last, is_terminal):
         # Image: float32 [0,1] -> uint8 [0,255]
         image = (np.clip(raw["image"], 0.0, 1.0) * 255).astype(np.uint8)
         return {
             "image": image,
             "vector": raw["vector"],
+            "overview": self._render_overview(),
             "is_first": is_first,
             "is_last": is_last,
             "is_terminal": is_terminal,
+            "log_coverage": np.float32(info.get("coverage", 0.0)),
+            "log_collision": np.float32(info.get("collision", 0.0)),
         }

@@ -103,7 +103,7 @@ class MultiEncoder(nn.Module):
         shapes,
     ):
         super().__init__()
-        excluded = ("is_first", "is_last", "is_terminal", "reward")
+        excluded = ("is_first", "is_last", "is_terminal", "reward", "overview")
         shapes = {k: v for k, v in shapes.items() if k not in excluded and not k.startswith("log_")}
         self.cnn_shapes = {k: v for k, v in shapes.items() if len(v) == 3 and re.match(config.cnn_keys, k)}
         self.mlp_shapes = {k: v for k, v in shapes.items() if len(v) in (1, 2) and re.match(config.mlp_keys, k)}
@@ -144,7 +144,7 @@ class MultiEncoder(nn.Module):
 class MultiDecoder(nn.Module):
     def __init__(self, config, deter, flat_stoch, shapes):
         super().__init__()
-        excluded = ("is_first", "is_last", "is_terminal")
+        excluded = ("is_first", "is_last", "is_terminal", "overview")
         shapes = {k: v for k, v in shapes.items() if k not in excluded}
         self.cnn_shapes = {k: v for k, v in shapes.items() if len(v) == 3 and re.match(config.cnn_keys, k)}
         self.mlp_shapes = {k: v for k, v in shapes.items() if len(v) in (1, 2) and re.match(config.mlp_keys, k)}

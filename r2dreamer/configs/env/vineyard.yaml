@@ -4,7 +4,7 @@ env_num: 4
 eval_episode_num: 4
 action_repeat: 1
 train_ratio: 512
-time_limit: 100   # 100 policy steps × 0.3 s = 30 s episode
+time_limit: 200   # 200 policy steps × 0.3 s = 60 s episode
 
 seed: ${seed}
 device: ${device}
